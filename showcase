@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hybrid Vision System | RGB-D YOLO11 Defect Inspection</title>
+  <meta name="description" content="基于 RGB-D、YOLO11、Mask Hook 和物理变形评估的瓦楞纸板缺陷检测项目展示。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="Hybrid Vision System">Hybrid Vision System</a>
+    <nav class="nav" aria-label="页面导航">
+      <a href="#pipeline">Pipeline</a>
+      <a href="#results">Results</a>
+      <a href="#code">Code</a>
+      <a href="#run">Run</a>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero section-band">
+      <div class="hero-text">
+        <p class="eyebrow">Corrugated Cardboard Defect Inspection</p>
+        <h1>RGB-D + YOLO11 + 物理变形分析的混合视觉检测系统</h1>
+        <p class="lead">
+          项目面向瓦楞纸板缺陷检测，将 RGB 图像、16-bit 深度图、YOLO11 检测输出、
+          SCFM/attention mask hook 和深度残差统计组合成一条可解释的检测流程。
+        </p>
+        <div class="hero-actions">
+          <a class="button primary" href="#results">查看实验结果</a>
+          <a class="button secondary" href="#code">查看代码结构</a>
+        </div>
+      </div>
+      <figure class="hero-visual">
+        <img src="assets/c_broken_doughnut_residual.jpg" alt="C_Broken 样本的 doughnut residual 可视化结果">
+        <figcaption>C_Broken 样本的 doughnut residual 可视化。</figcaption>
+      </figure>
+    </section>
+
+    <section class="section-band compact">
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span class="metric-value">RGB-D</span>
+          <p>输入为 RGB 图像与 16-bit 深度图，预处理阶段保持 letterbox 对齐。</p>
+        </article>
+        <article class="metric-card">
+          <span class="metric-value">YOLO11</span>
+          <p>使用本地 Ultralytics YOLO11 管线完成 box / damage 检测。</p>
+        </article>
+        <article class="metric-card">
+          <span class="metric-value">0.0500</span>
+          <p>Phase 3 safe threshold 下 FAR 记录值。</p>
+        </article>
+        <article class="metric-card">
+          <span class="metric-value">0.7273</span>
+          <p>Phase 3 safe threshold 下 F1 记录值。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="pipeline" class="section-band">
+      <div class="section-heading">
+        <p class="eyebrow">Technical Pipeline</p>
+        <h2>从检测框到深度物理判定</h2>
+        <p>管线中的每一步都对应项目中的现有代码或输出文件。</p>
+      </div>
+      <div class="pipeline">
+        <article>
+          <span>01</span>
+          <h3>RGB-D 预处理</h3>
+          <p><code>main_pipeline.py</code> 与 <code>run_experiment.py</code> 将 RGB 和 depth 统一 resize、pad，并生成 4 通道 tensor。</p>
+        </article>
+        <article>
+          <span>02</span>
+          <h3>YOLO11 推理</h3>
+          <p>加载本地权重，对瓦楞纸板图像执行检测，类别来自 <code>dataset.yaml</code>：<code>box</code>、<code>damage</code>。</p>
+        </article>
+        <article>
+          <span>03</span>
+          <h3>Mask Hook</h3>
+          <p><code>core/hook_handler.py</code> 通过 forward hook 捕获空间注意力图，并融合为全局置信 mask。</p>
+        </article>
+        <article>
+          <span>04</span>
+          <h3>物理变形评估</h3>
+          <p><code>core/physical_engine.py</code> 在 ROI 内使用有效深度点、mask 阈值、Sobel 梯度和方差阈值给出 broken 判定。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="results" class="section-band results">
+      <div class="section-heading">
+        <p class="eyebrow">Experiment Evidence</p>
+        <h2>项目输出中的关键结果</h2>
+        <p>以下数值与图片来自当前仓库的 <code>output/</code> 目录。</p>
+      </div>
+      <div class="result-layout">
+        <figure class="result-figure large">
+          <img src="assets/phase3_threshold_distributions.png" alt="Phase 3 threshold distributions 图">
+          <figcaption>Phase 3 threshold distributions。</figcaption>
+        </figure>
+        <div class="result-notes">
+          <article>
+            <h3>Phase 1 深度数据审计</h3>
+            <p>样本深度图为 <code>uint16</code>，ROI 平均有效深度比例为 <strong>0.9977</strong>，深度单位按 mm 处理。</p>
+          </article>
+          <article>
+            <h3>Phase 2 深度基线</h3>
+            <p>记录了 normal 与 broken 的 MAD 分布边界，得到 <strong>thr_mad = 0.1936018467</strong>。</p>
+          </article>
+          <article>
+            <h3>Phase 3 系统评估</h3>
+            <p>safe threshold 记录：FAR <strong>0.0500</strong>、TPR <strong>0.6000</strong>、Precision <strong>0.9231</strong>、F1 <strong>0.7273</strong>。</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="gallery">
+        <figure>
+          <img src="assets/a_normal_doughnut_residual.jpg" alt="A_Normal 样本 residual 可视化">
+          <figcaption>A_Normal residual。</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/c_broken_doughnut_residual.jpg" alt="C_Broken 样本 residual 可视化">
+          <figcaption>C_Broken residual。</figcaption>
+        </figure>
+        <figure>
+          <img src="assets/mad_distribution_doughnut.png" alt="Doughnut MAD distribution 图">
+          <figcaption>Doughnut MAD distribution。</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="code" class="section-band">
+      <div class="section-heading">
+        <p class="eyebrow">Repository Map</p>
+        <h2>核心代码结构</h2>
+      </div>
+      <div class="code-grid">
+        <article>
+          <h3><code>main_pipeline.py</code></h3>
+          <p>单样本 RGB-D 预处理、YOLO11 推理、mask 提取和物理变形评估入口。</p>
+        </article>
+        <article>
+          <h3><code>run_experiment.py</code></h3>
+          <p>批量收集图像和深度配对，输出实验结果和 per-sample 记录。</p>
+        </article>
+        <article>
+          <h3><code>core/hook_handler.py</code></h3>
+          <p>封装 SCFM/attention mask 捕获、归一化、上采样和多尺度融合。</p>
+        </article>
+        <article>
+          <h3><code>core/physical_engine.py</code></h3>
+          <p>封装 ROI 裁剪、有效深度过滤、梯度统计和 broken 判定。</p>
+        </article>
+        <article>
+          <h3><code>tests/</code></h3>
+          <p>包含 Phase 1、Phase 2、Phase 3、RGB-D 转换、阈值校准和系统指标相关测试。</p>
+        </article>
+        <article>
+          <h3><code>output/</code></h3>
+          <p>保存深度审计、残差可视化、阈值分布、before/after comparison 和系统指标。</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="run" class="section-band run-section">
+      <div class="section-heading">
+        <p class="eyebrow">Run Locally</p>
+        <h2>本地运行入口</h2>
+        <p>以下命令对应当前项目脚本；权重和数据路径按本地实际位置调整。</p>
+      </div>
+      <div class="command-grid">
+        <pre><code>python main_pipeline.py --weights weights/best.pt --device cpu</code></pre>
+        <pre><code>python run_experiment.py --weights weights/best.pt --device cpu</code></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Hybrid Vision System · RGB-D YOLO11 defect inspection project showcase</p>
+  </footer>
+</body>
+</html>
+
+# Hybrid Vision System Project Showcase
+
+这个目录是用于网投简历的静态项目展示页。
+
+## 本地查看
+
+直接打开 `index.html`，或在本目录启动一个静态服务：
+
+```powershell
+python -m http.server 8080
+```
+
+然后访问：
+
+```text
+http://localhost:8080
+```
+
+## 部署
+
+可将 `project_showcase/` 目录发布到 GitHub Pages、Gitee Pages 或任意静态站点托管服务。
+
+## 素材来源
+
+`assets/` 中图片来自当前项目的 `output/` 目录，页面文案基于 `main_pipeline.py`、`run_experiment.py`、`core/` 和 Phase 1/2/3 summary 文件。
+
+:root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --ink: #172033;
+  --muted: #5b667a;
+  --line: #dbe2ec;
+  --accent: #0b6f8f;
+  --accent-strong: #074e69;
+  --warm: #c26435;
+  --green: #4f7d49;
+  --shadow: 0 18px 50px rgba(23, 32, 51, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Inter", "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+  line-height: 1.65;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code {
+  background: #eef3f7;
+  border: 1px solid #d7e1ea;
+  border-radius: 5px;
+  color: #12344a;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 0.92em;
+  padding: 0.1rem 0.28rem;
+}
+
+.site-header {
+  align-items: center;
+  backdrop-filter: blur(14px);
+  background: rgba(245, 247, 251, 0.88);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 1.5rem;
+  justify-content: space-between;
+  left: 0;
+  min-height: 66px;
+  padding: 0 5vw;
+  position: sticky;
+  right: 0;
+  top: 0;
+  z-index: 20;
+}
+
+.brand {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  justify-content: flex-end;
+}
+
+.nav a {
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.nav a:hover {
+  color: var(--accent);
+}
+
+.section-band {
+  padding: 76px 5vw;
+}
+
+.compact {
+  padding-bottom: 42px;
+  padding-top: 42px;
+}
+
+.hero {
+  align-items: center;
+  display: grid;
+  gap: 42px;
+  grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.98fr);
+  min-height: calc(100vh - 66px);
+}
+
+.hero-text {
+  max-width: 760px;
+}
+
+.eyebrow {
+  color: var(--warm);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin: 0 0 0.7rem;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 5vw, 5.1rem);
+  letter-spacing: 0;
+  line-height: 1.05;
+  margin-bottom: 1.2rem;
+}
+
+h2 {
+  font-size: clamp(1.9rem, 3vw, 3rem);
+  letter-spacing: 0;
+  line-height: 1.12;
+  margin-bottom: 0.8rem;
+}
+
+h3 {
+  font-size: 1.08rem;
+  letter-spacing: 0;
+  margin-bottom: 0.45rem;
+}
+
+.lead {
+  color: var(--muted);
+  font-size: 1.12rem;
+  max-width: 680px;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 1.8rem;
+}
+
+.button {
+  align-items: center;
+  border-radius: 6px;
+  display: inline-flex;
+  font-weight: 800;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0.72rem 1rem;
+}
+
+.button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.button.secondary {
+  background: #e7eef5;
+  border: 1px solid #cbd8e4;
+  color: var(--accent-strong);
+}
+
+.hero-visual,
+.result-figure,
+.gallery figure {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  margin: 0;
+  overflow: hidden;
+}
+
+.hero-visual img {
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  width: 100%;
+}
+
+figcaption {
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.metric-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metric-card,
+.pipeline article,
+.result-notes article,
+.code-grid article {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1.15rem;
+}
+
+.metric-value {
+  color: var(--accent-strong);
+  display: block;
+  font-size: 1.65rem;
+  font-weight: 850;
+  line-height: 1.1;
+  margin-bottom: 0.5rem;
+}
+
+.metric-card p,
+.pipeline p,
+.result-notes p,
+.code-grid p,
+.section-heading p {
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
+.section-heading {
+  max-width: 820px;
+  margin-bottom: 28px;
+}
+
+.pipeline {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.pipeline span {
+  color: var(--green);
+  display: inline-block;
+  font-weight: 850;
+  margin-bottom: 0.7rem;
+}
+
+.results {
+  background: #edf3f8;
+}
+
+.result-layout {
+  align-items: stretch;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+}
+
+.result-figure.large img {
+  aspect-ratio: 16 / 10;
+  object-fit: contain;
+  padding: 1rem;
+  width: 100%;
+}
+
+.result-notes {
+  display: grid;
+  gap: 14px;
+}
+
+.gallery {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 20px;
+}
+
+.gallery img {
+  aspect-ratio: 4 / 3;
+  object-fit: contain;
+  padding: 0.75rem;
+  width: 100%;
+}
+
+.code-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.run-section {
+  background: #f8faf5;
+}
+
+.command-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+pre {
+  background: #101827;
+  border-radius: 8px;
+  color: #e6edf5;
+  margin: 0;
+  overflow-x: auto;
+  padding: 1rem;
+}
+
+pre code {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  padding: 0;
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  padding: 28px 5vw;
+}
+
+.footer p {
+  margin-bottom: 0;
+}
+
+@media (max-width: 980px) {
+  .hero,
+  .result-layout,
+  .command-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-grid,
+  .pipeline,
+  .code-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding-bottom: 0.8rem;
+    padding-top: 0.8rem;
+    position: static;
+  }
+
+  .section-band {
+    padding: 52px 5vw;
+  }
+
+  .metric-grid,
+  .pipeline,
+  .gallery,
+  .code-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions {
+    flex-direction: column;
+  }
+
+  .button {
+    width: 100%;
+  }
+}
