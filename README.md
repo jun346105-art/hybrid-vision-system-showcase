@@ -1,6 +1,6 @@
 # Hybrid Vision System Project Showcase
 
-这个目录是用于网投简历的静态项目展示页。
+这个目录是静态项目展示页。
 
 ## 本地查看
 
